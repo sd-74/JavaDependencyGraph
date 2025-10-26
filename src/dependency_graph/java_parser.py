@@ -1,0 +1,159 @@
+from tree_sitter import Language, Parser
+from pathlib import Path
+import json, sys
+
+_LANG_SO = Path("build/languages.so")
+_JAVA_REPO = Path("build/tree-sitter-java")
+
+def get_java_parser() -> Parser:
+    if not _LANG_SO.exists():
+        _JAVA_REPO.mkdir(parents=True, exist_ok=True)
+        # shallow clone if not present
+        import subprocess
+        if not (_JAVA_REPO / ".git").exists():
+            subprocess.run(["git", "clone", "--depth", "1",
+                            "https://github.com/tree-sitter/tree-sitter-java",
+                            str(_JAVA_REPO)], check=True)
+        Language.build_library(str(_LANG_SO), [str(_JAVA_REPO)])
+
+    lang = Language(str(_LANG_SO), "java")
+    p = Parser()
+    p.set_language(lang)
+    return p
+
+def slice_text(src: bytes, node):
+    return src[node.start_byte:node.end_byte].decode("utf-8")
+
+def parse_file(path: str | Path):
+    path = Path(path)
+    src_b = path.read_bytes()
+    parser = get_java_parser()
+    tree = parser.parse(src_b)
+    root = tree.root_node
+
+    pkg = None
+    types = []
+    methods = []
+    fields = []
+    stmts = []  # call/new/fieldref/local
+
+    # walk top-level
+    for ch in root.children:
+        if ch.type == "package_declaration":
+            name = ch.child_by_field_name("name")
+            if name:
+                pkg = slice_text(src_b, name).strip()
+            else:
+                # Try to find the package name in children
+                for child in ch.children:
+                    if child.type == "scoped_identifier":
+                        pkg = slice_text(src_b, child).strip()
+                        break
+        if ch.type == "class_declaration":
+            cls = ch
+            name = cls.child_by_field_name("name")
+            cls_name = slice_text(src_b, name)
+            fqn = f"{pkg}.{cls_name}" if pkg else cls_name
+
+            # super
+            extends = []
+            sc = cls.child_by_field_name("superclass")
+            if sc:
+                extends.append(slice_text(src_b, sc).replace("extends", "").strip())
+
+            types.append({
+                "kind": "class",
+                "name": cls_name,
+                "fqn": fqn,
+                "extends": extends,
+                "implements": [],
+                "range": [cls.start_byte, cls.end_byte],
+                "node_id": f"class:{fqn}"
+            })
+
+            # members
+            body = cls.child_by_field_name("body")
+            if not body: continue
+            for mem in body.children:
+                if mem.type == "method_declaration":
+                    mname = slice_text(src_b, mem.child_by_field_name("name"))
+                    params = mem.child_by_field_name("parameters")
+                    # naive param signature
+                    ps = []
+                    if params:
+                        for p in [c for c in params.children if c.type == "formal_parameter"]:
+                            t = p.child_by_field_name("type")
+                            ps.append(slice_text(src_b, t).strip())
+                    sig = ",".join(ps)
+                    mid = f"method:{fqn}#{mname}({sig})"
+                    methods.append({
+                        "owner_fqn": fqn,
+                        "name": mname,
+                        "sig": f"{fqn}#{mname}({sig})",
+                        "range": [mem.start_byte, mem.end_byte],
+                        "node_id": mid
+                    })
+                    # collect simple stmts inside body
+                    block = mem.child_by_field_name("body")
+                    if block:
+                        _collect_stmts(src_b, block, owner=mid, pkg=pkg, stmts=stmts)
+                elif mem.type == "field_declaration":
+                    # optional, not needed for the sample
+                    pass
+
+    return {
+        "path": str(path),
+        "symbols": {
+            "package": pkg or "<default>",
+            "types": types,
+            "methods": methods,
+            "fields": fields,
+            "stmts": stmts,
+        }
+    }
+
+def _collect_stmts(src_b, node, owner, pkg, stmts):
+    # walk subtree recursively to find method_invocation, object_creation, local vars
+    stack = [node]
+    while stack:
+        n = stack.pop()
+        for c in n.children: stack.append(c)
+
+        if n.type == "local_variable_declaration":
+            t = n.child_by_field_name("type")
+            decls = [c for c in n.children if c.type == "variable_declarator"]
+            for d in decls:
+                name = slice_text(src_b, d.child_by_field_name("name"))
+                stmts.append({
+                    "kind": "local",
+                    "owner_method": owner,
+                    "parts": {"name": name, "type": slice_text(src_b, t).strip()},
+                    "range": [n.start_byte, n.end_byte]
+                })
+        elif n.type == "object_creation_expression":
+            t = n.child_by_field_name("type")
+            stmts.append({
+                "kind": "new",
+                "owner_method": owner,
+                "parts": {"type": slice_text(src_b, t).strip()},
+                "range": [n.start_byte, n.end_byte]
+            })
+        elif n.type == "method_invocation":
+            obj = n.child_by_field_name("object")
+            name = n.child_by_field_name("name")
+            args = n.child_by_field_name("arguments")
+            arglist = []
+            if args:
+                # count args quickly (text; we only need arity)
+                txt = slice_text(src_b, args).strip()
+                inner = txt[1:-1]
+                arglist = [a for a in [x.strip() for x in inner.split(",")] if a] if inner else []
+            recv = None
+            if obj:
+                recv = slice_text(src_b, obj).strip()
+            stmts.append({
+                "kind": "call",
+                "owner_method": owner,
+                "parts": {"recv": recv, "name": slice_text(src_b, name), "args": arglist},
+                "range": [n.start_byte, n.end_byte]
+            })
