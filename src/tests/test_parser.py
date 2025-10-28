@@ -23,6 +23,7 @@ def main():
     an.stage2_build_symbols()
     an.stage3_cha_and_overrides()
     an.stage4_calls_and_news()
+    an.stage5_type_usage()
 
     # dump nodes/edges
     with open(out/"nodes.jsonl","w") as f:
@@ -38,6 +39,10 @@ def main():
     c = Counter(e["label"] for e in an.edges)
     print("Edge counts:", dict(c))
     print("Wrote:", out)
+
+
+    # print("Sample method:", json.dumps(files[0]["symbols"]["methods"][0], indent=2))
+    # print("Sample stmt:", json.dumps(files[0]["symbols"]["stmts"][0], indent=2))
 
 if __name__ == "__main__":
     main()

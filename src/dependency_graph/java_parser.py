@@ -78,12 +78,16 @@ def parse_file(path: str | Path):
                 if mem.type == "method_declaration":
                     mname = slice_text(src_b, mem.child_by_field_name("name"))
                     params = mem.child_by_field_name("parameters")
-                    # naive param signature
+                    # collect parameter types
                     ps = []
                     if params:
                         for p in [c for c in params.children if c.type == "formal_parameter"]:
                             t = p.child_by_field_name("type")
-                            ps.append(slice_text(src_b, t).strip())
+                            if t:
+                                ps.append(slice_text(src_b, t).strip())
+                    # return type (may be None for constructors)
+                    rtype_node = mem.child_by_field_name("type")
+                    return_type = slice_text(src_b, rtype_node).strip() if rtype_node else None
                     sig = ",".join(ps)
                     mid = f"method:{fqn}#{mname}({sig})"
                     methods.append({
@@ -91,15 +95,28 @@ def parse_file(path: str | Path):
                         "name": mname,
                         "sig": f"{fqn}#{mname}({sig})",
                         "range": [mem.start_byte, mem.end_byte],
-                        "node_id": mid
+                        "node_id": mid,
+                        "params": ps,
+                        "return_type": return_type
                     })
                     # collect simple stmts inside body
                     block = mem.child_by_field_name("body")
                     if block:
                         _collect_stmts(src_b, block, owner=mid, pkg=pkg, stmts=stmts)
                 elif mem.type == "field_declaration":
-                    # optional, not needed for the sample
-                    pass
+                    # capture field declarations for type usage
+                    ftype = mem.child_by_field_name("type")
+                    # variable_declarator(s) can be multiple per declaration
+                    decls = [c for c in mem.children if c.type == "variable_declarator"]
+                    for d in decls:
+                        fname_node = d.child_by_field_name("name")
+                        if not fname_node: continue
+                        fields.append({
+                            "owner_fqn": fqn,
+                            "name": slice_text(src_b, fname_node),
+                            "type": slice_text(src_b, ftype).strip() if ftype else None,
+                            "node_id": f"field:{fqn}#{slice_text(src_b, fname_node)}"
+                        })
 
     return {
         "path": str(path),

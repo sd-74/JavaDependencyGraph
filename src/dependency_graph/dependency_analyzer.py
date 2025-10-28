@@ -145,6 +145,68 @@ class Analyzer:
             if fqn.endswith("." + simple) or fqn == simple: return fqn
         return None
 
+    # ---- stage 5: resolve Uses/UsedBy (type dependencies) ----
+    def stage5_type_usage(self):
+        """
+        Extract Uses/UsedBy edges for type dependencies from:
+        - Local variable declarations (existing stmts)
+        - Method parameter types
+        - Method return types
+        - Field types
+        Only track types defined in this repo (ignore primitives/JDK types).
+        """
+        for f in self.files:
+            sym = f["symbols"]
+            pkg = sym["package"]
+
+            # 1) Local variable types
+            for s in sym["stmts"]:
+                if s["kind"] == "local":
+                    owner_method = s["owner_method"]
+                    var_type = s["parts"].get("type")
+                    if not var_type:
+                        continue
+                    clean = var_type.replace("[]", "").strip()
+                    type_fqn = self._resolve_simple(clean, pkg)
+                    if type_fqn and type_fqn in self.classes_by_fqn:
+                        cls_node = class_id(type_fqn)
+                        self.add_edge(owner_method, "Uses", cls_node)
+                        self.add_edge(cls_node, "UsedBy", owner_method)
+
+            # 2) Method parameter and return types
+            for m in sym["methods"]:
+                method_node = m["node_id"]
+                # params
+                for ptype in m.get("params", []) or []:
+                    clean = ptype.replace("[]", "").strip()
+                    type_fqn = self._resolve_simple(clean, pkg)
+                    if type_fqn and type_fqn in self.classes_by_fqn:
+                        cls_node = class_id(type_fqn)
+                        self.add_edge(method_node, "Uses", cls_node)
+                        self.add_edge(cls_node, "UsedBy", method_node)
+                # return type
+                rtype = m.get("return_type")
+                if rtype:
+                    clean = rtype.replace("[]", "").strip()
+                    type_fqn = self._resolve_simple(clean, pkg)
+                    if type_fqn and type_fqn in self.classes_by_fqn:
+                        cls_node = class_id(type_fqn)
+                        self.add_edge(method_node, "Uses", cls_node)
+                        self.add_edge(cls_node, "UsedBy", method_node)
+
+            # 3) Field types (per class)
+            for field in sym.get("fields", []) or []:
+                owner_class = class_id(field["owner_fqn"]) if field.get("owner_fqn") else None
+                ftype = field.get("type")
+                if not owner_class or not ftype:
+                    continue
+                clean = ftype.replace("[]", "").strip()
+                type_fqn = self._resolve_simple(clean, pkg)
+                if type_fqn and type_fqn in self.classes_by_fqn:
+                    cls_node = class_id(type_fqn)
+                    self.add_edge(owner_class, "Uses", cls_node)
+                    self.add_edge(cls_node, "UsedBy", owner_class)
+
     def _ancestors(self, fqn):
         cur = self.parents.get(fqn)
         while cur:
