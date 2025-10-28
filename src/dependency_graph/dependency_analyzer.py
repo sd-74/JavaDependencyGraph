@@ -4,6 +4,7 @@ from pathlib import Path
 # canon ids
 def module_id(pkg):           return f"module:{pkg}"
 def class_id(fqn):            return f"class:{fqn}"
+def interface_id(fqn):        return f"interface:{fqn}"
 def method_id(owner,name,sig):return f"method:{owner}#{name}({sig})"
 def ctor_id(owner,sig=""):    return f"constructor:{owner}::<init>({sig})"
 
@@ -26,7 +27,7 @@ class Analyzer:
         self._edge_set.add(key)
         self.edges.append({"src":src,"label":label,"dst":dst,"resolved":bool(resolved)})
 
-    # ---- stage 1: add module/class/method nodes and ParentOf/ChildOf ----
+    # ---- stage 1: add module/class/interface/method nodes and ParentOf/ChildOf ----
     def stage1_add_syntactic(self):
         for f in self.files:
             sym = f["symbols"]
@@ -36,13 +37,27 @@ class Analyzer:
             for t in sym["types"]:
                 cid = t["node_id"]
                 fqn = t["fqn"]
-                self.nodes.append({"id": cid, "label": f"Class: {t['name']}"})
+                if t.get("is_interface", False):
+                    self.nodes.append({"id": cid, "label": f"Interface: {t['name']}"})
+                else:
+                    self.nodes.append({"id": cid, "label": f"Class: {t['name']}"})
                 self.add_edge(mid, "ParentOf", cid)
                 self.add_edge(cid, "ChildOf", mid)
             for m in sym["methods"]:
                 mid_m = m["node_id"]
                 self.nodes.append({"id": mid_m, "label": f"Method: {m['name']}"})
-                owner = class_id(m["owner_fqn"])
+                # Owner could be class or interface - lookup from current file's types
+                owner_fqn = m["owner_fqn"]
+                # Find the owner type in the current file's symbols
+                owner_info = None
+                for t in sym["types"]:
+                    if t["fqn"] == owner_fqn:
+                        owner_info = t
+                        break
+                if owner_info and owner_info.get("is_interface", False):
+                    owner = interface_id(owner_fqn)
+                else:
+                    owner = class_id(owner_fqn)
                 self.add_edge(owner, "ParentOf", mid_m)
                 self.add_edge(mid_m, "ChildOf", owner)
 
@@ -53,7 +68,9 @@ class Analyzer:
             pkg = sym["package"]
             for t in sym["types"]:
                 self.classes_by_fqn[t["fqn"]] = {
-                    "node_id": t["node_id"], "pkg": pkg, "name": t["name"], "extends": t["extends"]
+                    "node_id": t["node_id"], "pkg": pkg, "name": t["name"], 
+                    "extends": t["extends"], "implements": t.get("implements", []),
+                    "is_interface": t.get("is_interface", False)
                 }
             for m in sym["methods"]:
                 key = m["sig"]         # "owner#name(sig)"
@@ -87,6 +104,32 @@ class Analyzer:
                     self.add_edge(mid, "Overrides", cand)
                     self.add_edge(cand, "OverriddenBy", mid)
                     break
+            # Check implemented interfaces for overrides
+            owner_info = self.classes_by_fqn.get(owner)
+            if owner_info and not owner_info.get("is_interface", False):
+                for interface_simple in owner_info.get("implements", []):
+                    interface_fqn = self._resolve_simple(interface_simple, owner_info["pkg"])
+                    if interface_fqn:
+                        cand = self.methods_index.get((interface_fqn, name, arity))
+                        if cand:
+                            self.add_edge(mid, "Overrides", cand)
+                            self.add_edge(cand, "OverriddenBy", mid)
+                            break
+
+    # ---- stage 3b: implements relationships ----
+    def stage3b_implements(self):
+        """Process implements relationships (class -> interface)"""
+        for fqn, info in self.classes_by_fqn.items():
+            if info.get("is_interface", False):
+                continue
+            for interface_simple in info.get("implements", []):
+                interface_fqn = self._resolve_simple(interface_simple, info["pkg"])
+                if not interface_fqn:
+                    continue
+                class_node = class_id(fqn)
+                interface_node = interface_id(interface_fqn)
+                self.add_edge(class_node, "Implements", interface_node)
+                self.add_edge(interface_node, "ImplementedBy", class_node)
 
     # ---- stage 4: resolve Calls/Instantiates ----
     def stage4_calls_and_news(self):
@@ -169,7 +212,11 @@ class Analyzer:
                     clean = var_type.replace("[]", "").strip()
                     type_fqn = self._resolve_simple(clean, pkg)
                     if type_fqn and type_fqn in self.classes_by_fqn:
-                        cls_node = class_id(type_fqn)
+                        type_info = self.classes_by_fqn[type_fqn]
+                        if type_info.get("is_interface", False):
+                            cls_node = interface_id(type_fqn)
+                        else:
+                            cls_node = class_id(type_fqn)
                         self.add_edge(owner_method, "Uses", cls_node)
                         self.add_edge(cls_node, "UsedBy", owner_method)
 
@@ -181,7 +228,11 @@ class Analyzer:
                     clean = ptype.replace("[]", "").strip()
                     type_fqn = self._resolve_simple(clean, pkg)
                     if type_fqn and type_fqn in self.classes_by_fqn:
-                        cls_node = class_id(type_fqn)
+                        type_info = self.classes_by_fqn[type_fqn]
+                        if type_info.get("is_interface", False):
+                            cls_node = interface_id(type_fqn)
+                        else:
+                            cls_node = class_id(type_fqn)
                         self.add_edge(method_node, "Uses", cls_node)
                         self.add_edge(cls_node, "UsedBy", method_node)
                 # return type
@@ -190,7 +241,11 @@ class Analyzer:
                     clean = rtype.replace("[]", "").strip()
                     type_fqn = self._resolve_simple(clean, pkg)
                     if type_fqn and type_fqn in self.classes_by_fqn:
-                        cls_node = class_id(type_fqn)
+                        type_info = self.classes_by_fqn[type_fqn]
+                        if type_info.get("is_interface", False):
+                            cls_node = interface_id(type_fqn)
+                        else:
+                            cls_node = class_id(type_fqn)
                         self.add_edge(method_node, "Uses", cls_node)
                         self.add_edge(cls_node, "UsedBy", method_node)
 
@@ -203,7 +258,11 @@ class Analyzer:
                 clean = ftype.replace("[]", "").strip()
                 type_fqn = self._resolve_simple(clean, pkg)
                 if type_fqn and type_fqn in self.classes_by_fqn:
-                    cls_node = class_id(type_fqn)
+                    type_info = self.classes_by_fqn[type_fqn]
+                    if type_info.get("is_interface", False):
+                        cls_node = interface_id(type_fqn)
+                    else:
+                        cls_node = class_id(type_fqn)
                     self.add_edge(owner_class, "Uses", cls_node)
                     self.add_edge(cls_node, "UsedBy", owner_class)
 

@@ -49,26 +49,42 @@ def parse_file(path: str | Path):
                     if child.type == "scoped_identifier":
                         pkg = slice_text(src_b, child).strip()
                         break
-        if ch.type == "class_declaration":
+        if ch.type in ["class_declaration", "interface_declaration"]:
+            is_interface = (ch.type == "interface_declaration")
             cls = ch
             name = cls.child_by_field_name("name")
             cls_name = slice_text(src_b, name)
             fqn = f"{pkg}.{cls_name}" if pkg else cls_name
 
-            # super
+            # super (for classes) or extends (for interfaces)
             extends = []
             sc = cls.child_by_field_name("superclass")
             if sc:
                 extends.append(slice_text(src_b, sc).replace("extends", "").strip())
+            
+            # implements (for classes)
+            implements = []
+            if not is_interface:
+                impls = cls.child_by_field_name("interfaces")
+                if impls:
+                    # The interfaces field contains a type_list with type_identifier nodes
+                    for impl in impls.children:
+                        if impl.type == "type_list":
+                            for type_node in impl.children:
+                                if type_node.type == "type_identifier":
+                                    implements.append(slice_text(src_b, type_node).strip())
+                        elif impl.type == "type_identifier":
+                            implements.append(slice_text(src_b, impl).strip())
 
             types.append({
-                "kind": "class",
+                "kind": "interface" if is_interface else "class",
                 "name": cls_name,
                 "fqn": fqn,
                 "extends": extends,
-                "implements": [],
+                "implements": implements,
+                "is_interface": is_interface,
                 "range": [cls.start_byte, cls.end_byte],
-                "node_id": f"class:{fqn}"
+                "node_id": f"interface:{fqn}" if is_interface else f"class:{fqn}"
             })
 
             # members

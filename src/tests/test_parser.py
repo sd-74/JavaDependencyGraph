@@ -22,6 +22,7 @@ def main():
     an.stage1_add_syntactic()
     an.stage2_build_symbols()
     an.stage3_cha_and_overrides()
+    an.stage3b_implements()
     an.stage4_calls_and_news()
     an.stage5_type_usage()
 
