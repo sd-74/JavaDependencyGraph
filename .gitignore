@@ -37,3 +37,17 @@ build/tree-sitter-java/
 # Output files
 graph_out/
 
+# Environment files and secrets
+.env
+.env.local
+.env.*.local
+*.env
+!config_example.env
+migration_output/
+
+# API keys and secrets
+*api*key*
+*secret*
+*password*
+*token*
+
