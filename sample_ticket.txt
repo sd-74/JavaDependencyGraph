@@ -1,0 +1,30 @@
+Summary: Refactor UserService to use dependency injection pattern
+
+Description: 
+The current UserService class is tightly coupled to concrete implementations and needs to be refactored to use dependency injection for better testability and maintainability.
+
+Current issues:
+- UserService directly instantiates UserRepository and EmailService
+- Hard to unit test due to tight coupling
+- Violates SOLID principles
+
+Requirements:
+- Replace direct instantiation with constructor injection
+- Create interfaces for UserRepository and EmailService
+- Update all calling code to use the new pattern
+- Maintain backward compatibility during transition
+- Add comprehensive unit tests
+
+Affected classes:
+- UserService
+- UserRepository
+- EmailService
+
+Affected methods:
+- UserService constructor
+- UserService.createUser()
+- UserService.updateUser()
+- UserService.deleteUser()
+
+Priority: High
+Type: refactor
