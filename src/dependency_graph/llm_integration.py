@@ -346,6 +346,85 @@ class LLMIntegration:
             print(f"Error generating migrated code: {e}")
             return original_code  # Return original code if migration fails
     
+    def generate_knowledge_graph_dot(self,
+                                     function_descriptions: List[FunctionDescription],
+                                     title: str = "Java Project Knowledge Graph") -> str:
+        """
+        Use the LLM to transform function descriptions into a Graphviz DOT diagram.
+
+        Args:
+            function_descriptions: List of FunctionDescription objects previously produced by the LLM.
+            title: Optional graph title.
+
+        Returns:
+            A Graphviz DOT string.
+        """
+        if not function_descriptions:
+            raise ValueError("No function descriptions provided for knowledge graph generation.")
+
+        payload = [{
+            "id": f"{f.class_name}.{f.name}",
+            "class": f.class_name,
+            "package": f.package,
+            "signature": f.signature,
+            "description": f.description,
+            "dependencies": f.dependencies,
+            "side_effects": f.side_effects,
+            "usage_context": f.usage_context,
+            "complexity": f.complexity
+        } for f in function_descriptions]
+
+        prompt = f"""
+        You are a software architect who creates knowledge graphs of Java projects.
+        Given the following JSON data describing methods, produce a Graphviz DOT diagram
+        called "{title}" that shows:
+        - A node for each method with a concise label containing the method name and class.
+        - Cluster subgraphs for each class containing its methods.
+        - Directed edges for dependencies listed in the JSON (e.g., Method A -> Method B).
+        - Use safe DOT identifiers (alphanumeric and underscores). You may replace dots with underscores.
+        - Include edge labels indicating "depends on".
+        - Keep the DOT output succinct and valid so it can be rendered without modification.
+
+        JSON data:
+        {json.dumps(payload, indent=2)}
+
+        Return ONLY the Graphviz DOT source code, optionally wrapped in a ```dot code block.
+        """
+
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert at summarizing software systems as Graphviz knowledge graphs."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.1,
+                max_tokens=1200
+            )
+
+            content = response.choices[0].message.content.strip()
+
+            if "```" in content:
+                parts = content.split("```")
+                # parts: ['', 'dot', 'digraph...', ''] or similar
+                for i in range(len(parts) - 1):
+                    snippet = parts[i + 1]
+                    if snippet.startswith("dot"):
+                        dot_text = parts[i + 2] if i + 2 < len(parts) else ""
+                        return dot_text.strip()
+                # fallback: take first fenced content
+                return parts[1].strip()
+
+            # Fallback: attempt to locate digraph directly
+            idx = content.find("digraph")
+            if idx != -1:
+                return content[idx:].strip()
+
+            raise ValueError("LLM response did not contain Graphviz DOT output.")
+
+        except Exception as e:
+            raise RuntimeError(f"Error generating knowledge graph DOT: {e}") from e
+    
     def validate_migration(self, 
                          original_code: str, 
                          migrated_code: str,

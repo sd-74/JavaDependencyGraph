@@ -30,6 +30,7 @@ python src/tests/test_parser.py path/to/java/project
 - **Java Code Parsing**: Uses Tree-sitter to parse Java source files and extract symbols
 - **Dependency Analysis**: Analyzes method calls, object instantiation, inheritance, and method overrides
 - **Graph Visualization**: Generates PNG and SVG dependency graphs using Graphviz
+- **LLM-Assisted Knowledge Graph**: Describes Java methods with an LLM and renders a knowledge graph via Graphviz
 - **Structured Output**: Exports dependency data as JSON/JSONL for further analysis
 
 ## Project Structure
@@ -92,6 +93,36 @@ This will:
 2. Analyze dependencies between classes and methods
 3. Generate dependency graphs in `tmp/graph_out/`
 4. Export structured data as JSON/JSONL files
+
+### LLM-Powered Knowledge Graph
+
+The repository includes `src/dependency_graph/knowledge_graph_generator.py`, which:
+
+1. Parses a Java project with Tree-sitter
+2. Calls an LLM to summarize every method
+3. Requests the LLM to transform those summaries into a Graphviz DOT graph
+4. Renders PNG/SVG knowledge graph artifacts
+
+**Prerequisites**
+
+- Set `OPENAI_API_KEY` in your environment or pass `--api-key`
+- Ensure Graphviz is installed and available on your `PATH`
+
+**Run the generator for the bundled example project**:
+
+```bash
+python -m dependency_graph.knowledge_graph_generator \
+  --project-path example_java_project \
+  --output-dir tmp/knowledge_graph \
+  --model gpt-4o-mini
+```
+
+Outputs:
+
+- `tmp/knowledge_graph/function_descriptions.json`
+- `tmp/knowledge_graph/knowledge_graph.dot`
+- `tmp/knowledge_graph/knowledge_graph.png`
+- `tmp/knowledge_graph/knowledge_graph.svg`
 
 ## Output Files
 
