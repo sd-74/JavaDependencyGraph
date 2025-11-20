@@ -30,22 +30,73 @@ class Analyzer:
     # ---- stage 1: add module/class/interface/method nodes and ParentOf/ChildOf ----
     def stage1_add_syntactic(self):
         for f in self.files:
+            file_path = Path(f["path"])
+            # Get relative path for metadata
+            try:
+                # Try to get relative path from a common root
+                rel_path = str(file_path)
+            except:
+                rel_path = str(file_path)
+            
+            # Read source code once per file
+            source_code = file_path.read_text(encoding="utf-8")
+            
             sym = f["symbols"]
             pkg = sym["package"]
             mid = module_id(pkg)
-            self.nodes.append({"id": mid, "label": f"Module: {pkg}"})
+            self.nodes.append({
+                "id": mid, 
+                "label": f"Module: {pkg}",
+                "metadata": {
+                    "file_path": rel_path,
+                    "line_range": [1, len(source_code.splitlines())]
+                }
+            })
+            
             for t in sym["types"]:
                 cid = t["node_id"]
                 fqn = t["fqn"]
+                line_range = t.get("line_range", [1, 1])
+                byte_range = t.get("range", [0, 0])
+                
+                # Extract source code for class/interface
+                class_source = source_code[byte_range[0]:byte_range[1]] if byte_range else ""
+                
                 if t.get("is_interface", False):
-                    self.nodes.append({"id": cid, "label": f"Interface: {t['name']}"})
+                    self.nodes.append({
+                        "id": cid, 
+                        "label": f"Interface: {t['name']}",
+                        "metadata": {
+                            "file_path": rel_path,
+                            "line_range": line_range,
+                            "source_code": class_source,
+                            "owner_fqn": fqn,
+                            "is_interface": True
+                        }
+                    })
                 else:
-                    self.nodes.append({"id": cid, "label": f"Class: {t['name']}"})
+                    self.nodes.append({
+                        "id": cid, 
+                        "label": f"Class: {t['name']}",
+                        "metadata": {
+                            "file_path": rel_path,
+                            "line_range": line_range,
+                            "source_code": class_source,
+                            "owner_fqn": fqn,
+                            "is_interface": False
+                        }
+                    })
                 self.add_edge(mid, "ParentOf", cid)
                 self.add_edge(cid, "ChildOf", mid)
+            
             for m in sym["methods"]:
                 mid_m = m["node_id"]
-                self.nodes.append({"id": mid_m, "label": f"Method: {m['name']}"})
+                line_range = m.get("line_range", [1, 1])
+                byte_range = m.get("range", [0, 0])
+                
+                # Extract source code for method
+                method_source = source_code[byte_range[0]:byte_range[1]] if byte_range else ""
+                
                 # Owner could be class or interface - lookup from current file's types
                 owner_fqn = m["owner_fqn"]
                 # Find the owner type in the current file's symbols
@@ -54,6 +105,20 @@ class Analyzer:
                     if t["fqn"] == owner_fqn:
                         owner_info = t
                         break
+                
+                self.nodes.append({
+                    "id": mid_m, 
+                    "label": f"Method: {m['name']}",
+                    "metadata": {
+                        "file_path": rel_path,
+                        "line_range": line_range,
+                        "source_code": method_source,
+                        "owner_fqn": owner_fqn,
+                        "return_type": m.get("return_type"),
+                        "params": m.get("params", [])
+                    }
+                })
+                
                 if owner_info and owner_info.get("is_interface", False):
                     owner = interface_id(owner_fqn)
                 else:

@@ -24,6 +24,10 @@ def get_java_parser() -> Parser:
 def slice_text(src: bytes, node):
     return src[node.start_byte:node.end_byte].decode("utf-8")
 
+def byte_to_line(src: bytes, byte_pos: int) -> int:
+    """Convert byte position to 1-indexed line number"""
+    return src[:byte_pos].count(b'\n') + 1
+
 def parse_file(path: str | Path):
     path = Path(path)
     src_b = path.read_bytes()
@@ -84,6 +88,7 @@ def parse_file(path: str | Path):
                 "implements": implements,
                 "is_interface": is_interface,
                 "range": [cls.start_byte, cls.end_byte],
+                "line_range": [byte_to_line(src_b, cls.start_byte), byte_to_line(src_b, cls.end_byte)],
                 "node_id": f"interface:{fqn}" if is_interface else f"class:{fqn}"
             })
 
@@ -111,6 +116,7 @@ def parse_file(path: str | Path):
                         "name": mname,
                         "sig": f"{fqn}#{mname}({sig})",
                         "range": [mem.start_byte, mem.end_byte],
+                        "line_range": [byte_to_line(src_b, mem.start_byte), byte_to_line(src_b, mem.end_byte)],
                         "node_id": mid,
                         "params": ps,
                         "return_type": return_type

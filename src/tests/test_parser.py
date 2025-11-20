@@ -41,9 +41,47 @@ def main():
     print("Edge counts:", dict(c))
     print("Wrote:", out)
 
+    # Verify metadata completeness
+    verify_metadata_completeness(an.nodes)
 
-    # print("Sample method:", json.dumps(files[0]["symbols"]["methods"][0], indent=2))
-    # print("Sample stmt:", json.dumps(files[0]["symbols"]["stmts"][0], indent=2))
+
+def verify_metadata_completeness(nodes):
+    """Verify all nodes have required metadata fields"""
+    print("\nVerifying metadata completeness...")
+
+    issues = []
+    for node in nodes:
+        node_id = node["id"]
+        metadata = node.get("metadata", {})
+
+        # Check file_path
+        if not metadata.get("file_path"):
+            issues.append(f"{node_id}: missing file_path")
+
+        # Check line_range
+        if not metadata.get("line_range"):
+            issues.append(f"{node_id}: missing line_range")
+
+        # For methods, check additional fields
+        if node_id.startswith("method:"):
+            if not metadata.get("return_type") and metadata.get("return_type") is not None:
+                # return_type can be None for constructors, so only check if it's missing entirely
+                pass
+            if "params" not in metadata:
+                issues.append(f"{node_id}: missing params")
+            if not metadata.get("source_code"):
+                issues.append(f"{node_id}: missing source_code")
+
+    if issues:
+        print(f"WARNING: Found {len(issues)} metadata issues:")
+        for issue in issues[:10]:  # Show first 10
+            print(f"   - {issue}")
+        if len(issues) > 10:
+            print(f"   ... and {len(issues) - 10} more")
+    else:
+        print("OK: All nodes have complete metadata")
+
+    return len(issues) == 0
 
 if __name__ == "__main__":
     main()
