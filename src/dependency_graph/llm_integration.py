@@ -11,7 +11,7 @@ import os
 import json
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass
-import openai
+from together import Together
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -49,13 +49,13 @@ class MigrationPlan:
 
 class LLMIntegration:
     """Integration with Large Language Models for code analysis and generation"""
-    
-    def __init__(self, api_key: Optional[str] = None, model: str = "gpt-4"):
-        self.api_key = api_key or os.getenv("OPENAI_API_KEY")
+
+    def __init__(self, api_key: Optional[str] = None, model: str = "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"):
+        self.api_key = api_key or os.getenv("TOGETHER_API_KEY")
         if not self.api_key:
-            raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass api_key parameter.")
-        
-        self.client = openai.OpenAI(api_key=self.api_key)
+            raise ValueError("Together.ai API key is required. Set TOGETHER_API_KEY environment variable or pass api_key parameter.")
+
+        self.client = Together(api_key=self.api_key)
         self.model = model
     
     def analyze_function_descriptions(self, 

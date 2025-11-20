@@ -7,30 +7,14 @@ Determines which files are relevant to a given mandate/task.
 import json
 from pathlib import Path
 from typing import List, Dict, Set
-
-try:
-    from anthropic import Anthropic
-except ImportError:
-    try:
-        from openai import OpenAI
-        Anthropic = None
-    except ImportError:
-        Anthropic = None
-        OpenAI = None
+from together import Together
 
 
 class MandateFilter:
-    def __init__(self, api_key: str, model: str = "claude-sonnet-4-5-20250929", use_openai: bool = False):
+    def __init__(self, api_key: str, model: str = "meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo"):
         """Initialize mandate filter with LLM client"""
-        self.use_openai = use_openai
-        if use_openai and OpenAI:
-            self.client = OpenAI(api_key=api_key)
-            self.model = model
-        elif Anthropic:
-            self.client = Anthropic(api_key=api_key)
-            self.model = model
-        else:
-            raise ImportError("Neither anthropic nor openai packages are installed")
+        self.client = Together(api_key=api_key)
+        self.model = model
         self.cache = {}  # Cache file relevance decisions
 
     def is_file_relevant(self, file_path: str, file_content: str, mandate: str) -> bool:
@@ -74,20 +58,12 @@ or
 NO - [reason]
 """
 
-        if self.use_openai:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                max_tokens=100,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            answer = response.choices[0].message.content.strip()
-        else:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=100,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            answer = response.content[0].text.strip()
+        response = self.client.chat.completions.create(
+            model=self.model,
+            max_tokens=100,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        answer = response.choices[0].message.content.strip()
 
         is_relevant = answer.upper().startswith("YES")
 

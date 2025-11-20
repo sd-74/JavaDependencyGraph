@@ -1,2 +1,4 @@
 tree_sitter==0.21.3
 graphviz==0.20.3
+together
+python-dotenv

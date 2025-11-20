@@ -144,7 +144,7 @@ def generate_mandate_focused_knowledge_graph(
         source_files[rel_path] = Path(java_file).read_text(encoding="utf-8")
 
     # Step 3: Filter nodes by mandate relevance
-    mandate_filter = MandateFilter(api_key=api_key, model=model, use_openai=("gpt" in model.lower() or "openai" in model.lower()))
+    mandate_filter = MandateFilter(api_key=api_key, model=model)
     relevant_node_ids = mandate_filter.filter_nodes_by_mandate(
         nodes, source_files, mandate
     )
@@ -256,8 +256,8 @@ def main() -> None:
     parser.add_argument(
         "--model",
         type=str,
-        default="gpt-4",
-        help="LLM model identifier to use for OpenAI API calls.",
+        default="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+        help="LLM model identifier to use for Together.ai API calls.",
     )
     parser.add_argument(
         "--title",
@@ -268,9 +268,9 @@ def main() -> None:
     parser.add_argument(
         "--api-key",
         type=str,
-        default=os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"),
+        default=os.getenv("TOGETHER_API_KEY"),
         help=(
-            "Optional API key (defaults to OPENAI_API_KEY or ANTHROPIC_API_KEY "
+            "Optional API key (defaults to TOGETHER_API_KEY "
             "environment variable)."
         ),
     )
@@ -291,7 +291,7 @@ def main() -> None:
     if not args.api_key:
         parser.error(
             "API key must be provided via --api-key or "
-            "OPENAI_API_KEY/ANTHROPIC_API_KEY environment variable."
+            "TOGETHER_API_KEY environment variable."
         )
 
     if args.mandate:
