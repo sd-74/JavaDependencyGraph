@@ -12,8 +12,8 @@ import os
 from pathlib import Path
 from typing import Optional
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__)))
+# Add current directory to path for Phase 1 compatibility (works with or without pip install -e .)
+sys.path.insert(0, os.path.dirname(__file__))
 
 from dependency_graph.migration_engine import MigrationEngine
 

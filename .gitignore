@@ -36,6 +36,7 @@ build/tree-sitter-java/
 
 # Output files
 graph_out/
+nul
 
 # Environment files and secrets
 .env
@@ -50,4 +51,10 @@ migration_output/
 *secret*
 *password*
 *token*
+
+# Test outputs
+test_kg_fix_output/
+knowledge_graph_test/
+mandate_graph/
+my_mandate_analysis/
 

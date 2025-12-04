@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "java-dependency-graph"
+version = "0.1.0"
+description = "Java static analysis and migration tool with LLM-powered code transformation"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "JavaDependencyGraph Team", email = "info@example.com"}
+]
+dependencies = [
+    "tree-sitter==0.21.3",
+    "graphviz>=0.20.3",
+    "together>=1.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "mypy>=1.0.0",
+]
+
+[project.scripts]
+# Console script entry points (accessible after pip install -e .)
+java-dep-analyze = "tests.test_parser:main"
+java-dep-migrate = "migration_cli:main"
+java-knowledge-graph = "dependency_graph.knowledge_graph_generator:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dependency_graph*", "utils*", "tests*"]
+
+[tool.setuptools.package-dir]
+"" = "src"

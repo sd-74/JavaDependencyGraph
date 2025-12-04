@@ -6,12 +6,12 @@ This script shows how to use the migration engine programmatically
 to perform headless code migrations from JIRA tickets.
 """
 
-import os
 import sys
+import os
 from pathlib import Path
 
-# Add the src directory to the path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
+# Add src/ to path for Phase 1 compatibility (works with or without pip install -e .)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 from dependency_graph.migration_engine import MigrationEngine
 from dependency_graph.jira_parser import parse_jira_ticket

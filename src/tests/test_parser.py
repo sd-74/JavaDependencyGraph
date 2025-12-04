@@ -1,7 +1,11 @@
-import json, sys
-from pathlib import Path
+import json
+import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from pathlib import Path
+
+# Add parent directory to path for Phase 1 compatibility (works with or without pip install -e .)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+
 from dependency_graph.analyzer import index_repo
 from dependency_graph.dependency_analyzer import Analyzer
 from dependency_graph.dot_exporter import to_dot

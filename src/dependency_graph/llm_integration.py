@@ -382,13 +382,16 @@ class LLMIntegration:
         - Cluster subgraphs for each class containing its methods.
         - Directed edges for dependencies listed in the JSON (e.g., Method A -> Method B).
         - Use safe DOT identifiers (alphanumeric and underscores). You may replace dots with underscores.
-        - Include edge labels indicating "depends on".
+        - Include edge labels indicating "depends on" or "calls".
         - Keep the DOT output succinct and valid so it can be rendered without modification.
 
         JSON data:
         {json.dumps(payload, indent=2)}
 
-        Return ONLY the Graphviz DOT source code, optionally wrapped in a ```dot code block.
+        IMPORTANT: Return ONLY the complete Graphviz DOT source code starting with "digraph".
+        You may wrap it in a ```dot code fence if you prefer.
+        Do not include any explanations before or after the DOT code.
+        Make sure the output is valid DOT syntax that can be rendered directly.
         """
 
         try:
@@ -399,27 +402,32 @@ class LLMIntegration:
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
-                max_tokens=1200
+                max_tokens=4000
             )
 
             content = response.choices[0].message.content.strip()
 
+            # Try to extract from code fence
             if "```" in content:
                 parts = content.split("```")
-                # parts: ['', 'dot', 'digraph...', ''] or similar
-                for i in range(len(parts) - 1):
-                    snippet = parts[i + 1]
-                    if snippet.startswith("dot"):
-                        dot_text = parts[i + 2] if i + 2 < len(parts) else ""
-                        return dot_text.strip()
-                # fallback: take first fenced content
-                return parts[1].strip()
+                # parts: [before, code_block_1, after_1, code_block_2, after_2, ...]
+                for part in parts[1::2]:  # Only look at odd indices (code blocks)
+                    # Remove language identifier if present (e.g., "dot\n")
+                    cleaned = part.strip()
+                    if cleaned.startswith("dot"):
+                        cleaned = cleaned[3:].strip()
+                    # Check if this looks like DOT content
+                    if "digraph" in cleaned or "graph" in cleaned:
+                        return cleaned
 
             # Fallback: attempt to locate digraph directly
             idx = content.find("digraph")
             if idx != -1:
                 return content[idx:].strip()
 
+            # Log the response for debugging
+            print(f"WARNING: Could not extract DOT from LLM response. Response length: {len(content)}")
+            print(f"First 500 chars: {content[:500]}")
             raise ValueError("LLM response did not contain Graphviz DOT output.")
 
         except Exception as e:

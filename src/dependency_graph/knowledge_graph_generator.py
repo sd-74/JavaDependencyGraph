@@ -14,6 +14,7 @@ from dependency_graph.llm_integration import (
 )
 from dependency_graph.mandate_filter import MandateFilter
 from dependency_graph.subgraph_extractor import SubgraphExtractor
+from dependency_graph.dot_exporter import to_dot
 from utils.file_utils import find_files
 
 
@@ -50,10 +51,14 @@ def _extract_function_descriptions(
 def _render_graph(
     dot_source: str, output_dir: Path, base_name: str = "knowledge_graph"
 ) -> None:
+    if not dot_source or not dot_source.strip():
+        raise ValueError("DOT source is empty or None - cannot render graph")
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     dot_path = output_dir / f"{base_name}.dot"
     dot_path.write_text(dot_source, encoding="utf-8")
+    print(f"Written DOT file: {dot_path} ({len(dot_source)} bytes)")
 
     graph = Source(dot_source)
     graph.format = "png"
@@ -170,6 +175,15 @@ def generate_mandate_focused_knowledge_graph(
     )
     (subgraph_dir / "edges.jsonl").write_text(
         "\n".join(json.dumps(e) for e in subgraph_edges)
+    )
+
+    # Step 5b: Generate subgraph visualizations (DOT and PNG)
+    print("📊 Generating subgraph visualizations...")
+    to_dot(
+        subgraph_nodes,
+        subgraph_edges,
+        str(subgraph_dir / "subgraph"),
+        str(subgraph_dir / "subgraph")
     )
 
     # Step 6: Generate LLM descriptions for subgraph methods

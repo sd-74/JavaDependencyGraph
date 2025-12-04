@@ -27,6 +27,16 @@ winget install graphviz
 
 ## Common Commands
 
+### Quick Start (Easiest)
+```bash
+# Windows
+run_tests.bat
+
+# Linux/Mac
+chmod +x run_tests.sh
+./run_tests.sh
+```
+
 ### Basic Dependency Analysis (No API Key Required)
 ```bash
 # Analyze a Java project
@@ -39,19 +49,52 @@ python src/tests/test_parser.py path/to/java/project
 # - symbol_tables.json (raw parsed data)
 ```
 
-### LLM-Powered Knowledge Graph (Requires OpenAI API Key)
+### LLM-Powered Knowledge Graph (Requires Together.ai API Key)
 ```bash
 # Set API key first
-export OPENAI_API_KEY="your-key"
+export TOGETHER_API_KEY="your-key"  # Linux/Mac
+set TOGETHER_API_KEY=your-key       # Windows
 
-# Generate knowledge graph
-python -m dependency_graph.knowledge_graph_generator \
-  --project-path example_java_project \
-  --output-dir tmp/knowledge_graph \
-  --model gpt-4o-mini
+# Generate knowledge graph (Windows - note the -X utf8 flag!)
+cd src
+python -X utf8 -m dependency_graph.knowledge_graph_generator ^
+  --project-path ../example_java_project ^
+  --output-dir ../tmp/knowledge_graph
+cd ..
+
+# Generate knowledge graph (Linux/Mac)
+cd src
+python3 -m dependency_graph.knowledge_graph_generator \
+  --project-path ../example_java_project \
+  --output-dir ../tmp/knowledge_graph
+cd ..
 ```
 
-### Full Migration Tool (Requires OpenAI API Key)
+### Mandate-Focused Subgraph Analysis
+```bash
+# 1. Generate base dependency graph first
+python src/tests/test_parser.py example_java_project
+
+# 2. Run mandate-focused analysis (Windows)
+cd src
+python -X utf8 -m dependency_graph.knowledge_graph_generator ^
+  --project-path ../example_java_project ^
+  --output-dir ../tmp/mandate_graph ^
+  --mandate "user management and data handling" ^
+  --dependency-graph-dir ../tmp/graph_out
+cd ..
+
+# 2. Run mandate-focused analysis (Linux/Mac)
+cd src
+python3 -m dependency_graph.knowledge_graph_generator \
+  --project-path ../example_java_project \
+  --output-dir ../tmp/mandate_graph \
+  --mandate "user management and data handling" \
+  --dependency-graph-dir ../tmp/graph_out
+cd ..
+```
+
+### Full Migration Tool (Requires Together.ai API Key)
 ```bash
 # Preview migration plan without executing
 python src/migration_cli.py \
@@ -64,14 +107,18 @@ python src/migration_cli.py \
   --ticket-file sample_ticket.txt \
   --project path/to/java/project \
   --output migration_results
-
-# Use custom LLM model
-python src/migration_cli.py \
-  --ticket-file sample_ticket.txt \
-  --project path/to/java/project \
-  --model gpt-4o \
-  --output results
 ```
+
+## Important Notes
+
+### Windows Users
+Always use `python -X utf8` flag when running knowledge graph generators to avoid emoji encoding errors in console output.
+
+### Module Import Issues
+If you encounter `ModuleNotFoundError: No module named 'dependency_graph'`:
+- Run commands from the **project root** directory
+- Use the provided helper scripts (`run_tests.bat` or `run_tests.sh`)
+- For manual testing, ensure you're using the correct working directory as shown in examples above
 
 ## Architecture
 
